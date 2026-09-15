@@ -2,4 +2,11 @@
 __pycache__/
 *.pyc
 
+# Ignore original/large datasets
 data/*.csv
+
+# Include the selected synthetic dataset
+!data/selected_customers.csv
+!data/selected_orders.csv
+!data/selected_order_items.csv
+!data/selected_products.csv
