@@ -37,8 +37,10 @@ def execute_query(sql: str, params: dict = None) -> dict:
     """
     try:
         with engine.connect() as connection:
-            result = connection.execute(text(sql), params or {})
+        # Limit each query to 5 seconds
+            connection.execute(text("SET LOCAL statement_timeout = '5000'"))
 
+            result = connection.execute(text(sql), params or {})
             columns = list(result.keys())
             rows = [dict(row._mapping) for row in result]
 
