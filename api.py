@@ -1,16 +1,27 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from src.ai import generate_sql, explain_results
 from src.sql_validator import validate_sql
 from src.db import execute_query
 from src.schema_loader import get_database_schema
 
-app = FastAPI(title="AI SQL Analyst")
-
+app = FastAPI(title="DataBridge")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5501",
+        "http://127.0.0.1:5501",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class QuestionRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=3, max_length=500)
+
 
 @app.get("/health")
 def health_check():
@@ -33,11 +44,10 @@ def ask_question(request: QuestionRequest):
     result = execute_query(sql)
 
     if not result["success"]:
-        return {
-            "success": False,
-            "sql": sql,
-            "error": result["error"]
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=result["error"]
+        )
 
     explanation = explain_results(
         request.question,
