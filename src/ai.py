@@ -26,10 +26,11 @@ Rules:
 - Do not use markdown.
 - Do not explain anything.
 - Use only tables and columns from the schema.
+- When the question asks for a metric such as revenue, spending, sales, quantity, or count, include the calculated metric in the SELECT output.
 """
 
     response = client.models.generate_content(
-        model="gemini-3.5-flash",
+        model="gemini-3.5-flash-lite",
         contents=prompt
     )
 
@@ -56,7 +57,7 @@ Rules:
 """
 
     response = client.models.generate_content(
-        model="gemini-3.5-flash",
+        model="gemini-3.5-flash-lite",
         contents=prompt
     )
 

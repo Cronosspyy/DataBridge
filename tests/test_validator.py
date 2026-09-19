@@ -70,3 +70,25 @@ def test_block_block_comment():
     )
 
     assert valid is False
+
+def test_allow_cte_select():
+    valid, message = validate_sql(
+        """
+        WITH customer_spending AS (
+            SELECT customer_id, SUM(total_amount) AS spending
+            FROM orders
+            GROUP BY customer_id
+        )
+        SELECT *
+        FROM customer_spending
+        ORDER BY spending DESC;
+        """
+    )
+
+    assert valid is True
+
+def test_block_insert():
+    valid, message = validate_sql(
+        "INSERT INTO customers VALUES (1, 'Test')"
+    )
+    assert valid is False

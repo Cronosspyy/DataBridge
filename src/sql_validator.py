@@ -26,7 +26,7 @@ def validate_sql(sql):
     sql = sql.strip()
 
     # Only SELECT queries are allowed
-    if not sql.startswith("select"):
+    if not (sql.startswith("select") or sql.startswith("with")):
         return False, "Only SELECT queries are allowed."
 
     # Block multiple SQL statements
