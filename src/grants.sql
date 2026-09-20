@@ -12,7 +12,17 @@
 CREATE ROLE databridge_readonly LOGIN PASSWORD 'change-me-before-running';
 
 -- Can see the schema, cannot create anything in it.
-GRANT CONNECT ON DATABASE databridge TO databridge_readonly;
+-- The database name is resolved at runtime so this works whatever the
+-- database is called (Neon defaults to neondb, a local setup may use
+-- databridge).
+DO $$
+BEGIN
+    EXECUTE format(
+        'GRANT CONNECT ON DATABASE %I TO databridge_readonly',
+        current_database()
+    );
+END
+$$;
 GRANT USAGE ON SCHEMA public TO databridge_readonly;
 
 -- SELECT on the four tables, and nothing else.
