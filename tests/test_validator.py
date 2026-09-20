@@ -87,7 +87,8 @@ def test_allow_cte_select():
 
     assert valid is True
 
-def test_block_insert():
+# Block INSERT with no trailing semicolon
+def test_block_insert_without_semicolon():
     valid, message = validate_sql(
         "INSERT INTO customers VALUES (1, 'Test')"
     )
