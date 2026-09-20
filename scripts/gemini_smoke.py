@@ -1,3 +1,12 @@
+"""
+Manual check that the Gemini key and model name work.
+
+    python scripts/gemini_smoke.py
+
+Deliberately not under tests/: it makes a real API call, so it must not run
+as part of the test suite.
+"""
+
 import os
 from dotenv import load_dotenv
 from google import genai
