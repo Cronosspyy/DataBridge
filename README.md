@@ -31,6 +31,7 @@ question ──▶ Gemini ──▶ SQL ──▶ validator ──▶ PostgreSQL
 | `src/schema.sql` | The four tables: customers, products, orders, order_items. |
 | `src/grants.sql` | Read-only Postgres role used in production. |
 | `scripts/load_data.py` | Creates the tables and loads `data/*.csv`. |
+| `scripts/create_readonly_role.py` | Applies `grants.sql` and emits the read-only connection string. |
 | `public/` | The two static pages, served as the site root. |
 | `tests/` | Validator unit tests and live API tests. |
 
@@ -86,31 +87,46 @@ The whole thing runs as one Vercel project: `public/` is served as static files
 and everything else is routed to `app.py`.
 
 **1. Create a database.** Vercel functions cannot reach your laptop, so you need
-a hosted Postgres. [Neon](https://neon.tech) has a free tier. Create a project
-and copy the **pooled** connection string — serverless functions open many short
-connections, and the pooled endpoint is what handles that.
+a hosted Postgres. Easiest route is the Vercel **Storage** tab -> Marketplace ->
+[Neon](https://neon.tech), which attaches a database to the project and injects
+`DATABASE_URL` and friends automatically. Creating it at neon.tech and copying
+the connection string by hand works too.
 
-**2. Load the data** from your machine into that database, using the owner
-connection string:
+**2. Load the data** from your machine. Put the **unpooled** owner connection
+string in `.env` as `DATABASE_URL` - bulk `COPY` is happier on a direct
+connection - then:
 
 ```bash
-DATABASE_URL="postgresql://...neon.tech/...?sslmode=require" python scripts/load_data.py
+python scripts/load_data.py
 ```
 
-**3. Create the read-only role.** Edit the password in `src/grants.sql`, then run
-it against the same database. This is what actually stops a generated `DROP` —
-see [Security](#security).
+**3. Create the read-only role:**
+
+```bash
+python scripts/create_readonly_role.py
+```
+
+This applies `src/grants.sql` with a generated password and writes the resulting
+read-only connection string to `.env` as `DATABASE_URL_READONLY`, pointed at
+Neon's pooled endpoint. Use `--show` to print it when you need to paste it into
+Vercel. This is what actually stops a generated `DROP` - see
+[Security](#security).
 
 **4. Import the repository** at [vercel.com/new](https://vercel.com/new). Vercel
 detects FastAPI from `requirements.txt`; leave the build settings alone.
 
 **5. Set environment variables** before the first deploy, under
-Settings → Environment Variables:
+Settings -> Environments:
 
 | Name | Value |
 | --- | --- |
-| `DATABASE_URL` | The `databridge_readonly` connection string, with `?sslmode=require` |
+| `DATABASE_URL_READONLY` | Output of `create_readonly_role.py --show` |
 | `GEMINI_API_KEY` | Your Gemini key |
+
+`src/db.py` prefers `DATABASE_URL_READONLY` and falls back to `DATABASE_URL`.
+The two names exist because the Neon integration manages `DATABASE_URL` itself,
+points it at the owner role, and does not let you edit it in the dashboard, so
+the read-only string is supplied under its own name rather than fighting it.
 
 **6. Deploy.** Check `/health` returns `{"status":"ok"}`, then ask a question on
 the home page.

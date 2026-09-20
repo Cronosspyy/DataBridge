@@ -5,7 +5,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Prefer the read-only role whenever one is configured, and fall back to
+# DATABASE_URL for local work against a database you own.
+#
+# Two names are needed because Vercel's Neon integration manages DATABASE_URL
+# itself and points it at the owner role; that variable cannot be edited in the
+# dashboard. DATABASE_URL_READONLY is set alongside it so the deployed app
+# connects as databridge_readonly (see src/grants.sql).
+DATABASE_URL = os.getenv("DATABASE_URL_READONLY") or os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "Neither DATABASE_URL_READONLY nor DATABASE_URL is set. "
+        "Copy .env.example to .env and fill it in."
+    )
 
 engine = create_engine(DATABASE_URL)
 
