@@ -1,6 +1,10 @@
 .env
 __pycache__/
 *.pyc
+.venv/
+.vercel/
+.DS_Store
+.vscode/
 
 # Ignore original/large datasets
 data/*.csv

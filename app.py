@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -8,12 +10,26 @@ from src.db import execute_query
 from src.schema_loader import get_database_schema
 
 app = FastAPI(title="DataBridge")
+
+# On Vercel the pages in public/ are served from the same origin as this app,
+# so no CORS headers are needed there. They are only needed for local
+# development, where the pages come off a static server on another port.
+# CORS_ORIGINS overrides the defaults as a comma-separated list.
+default_origins = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:5501",
+    "http://127.0.0.1:5501",
+]
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", ",".join(default_origins)).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5501",
-        "http://127.0.0.1:5501",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
