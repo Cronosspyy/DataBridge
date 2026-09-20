@@ -446,7 +446,13 @@ pre.sql {
 /* =========================================================
    CONFIG — same as index.html
    ========================================================= */
-const API_BASE     = "http://127.0.0.1:8000";
+/* Same origin in production: on Vercel these pages and the FastAPI app are one
+   deployment, so requests go to /ask directly. Falls back to a local uvicorn
+   when the page is opened from file:// or a static dev server (Live Server). */
+const LOCAL_PORTS  = ["5500", "5501"];
+const API_BASE     = location.protocol.startsWith("http") && !LOCAL_PORTS.includes(location.port)
+  ? ""
+  : "http://127.0.0.1:8000";
 const ASK_ENDPOINT = "/ask";
 const REQUEST_KEY  = "question";
 
@@ -737,9 +743,9 @@ function showError(q, msg, hint) {
 }
 
 /* ---------- Recent questions (per browser) ---------- */
-function getRecent() { try { return JSON.parse(localStorage.getItem("sqlAnalystRecent") || "[]"); } catch { return []; } }
+function getRecent() { try { return JSON.parse(localStorage.getItem("dataBridgeRecent") || "[]"); } catch { return []; } }
 function pushRecent(q) {
-  try { localStorage.setItem("sqlAnalystRecent", JSON.stringify([q, ...getRecent().filter((x) => x !== q)].slice(0, 6))); } catch {}
+  try { localStorage.setItem("dataBridgeRecent", JSON.stringify([q, ...getRecent().filter((x) => x !== q)].slice(0, 6))); } catch {}
 }
 function renderRecent(current) {
   const box = $("#recent"), items = getRecent().filter((x) => x !== current).slice(0, 4);
@@ -759,7 +765,7 @@ async function run(q) {
   q = (q || "").trim();
   if (!q) { input.focus(); return; }
   input.value = q;
-  document.title = q + " — AI SQL Analyst";
+  document.title = q + " — DataBridge";
   history.replaceState(null, "", "?q=" + encodeURIComponent(q));   // shareable / refresh-safe URL
 
   const t0 = performance.now();

@@ -1,0 +1,8 @@
+# Local development and tooling. Not installed on Vercel.
+# pandas lives here on purpose: it is only used by scripts/load_data.py, and it
+# is large enough to matter against the serverless bundle size limit.
+-r requirements.txt
+
+pandas==3.0.6
+pytest==9.1.1
+requests==2.34.2

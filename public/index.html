@@ -446,13 +446,19 @@ footer { text-align: center; padding: 30px 0 20px; font-size: 13px; color: var(-
     <div class="step"><h4>Understand</h4><p>Get the query, a table, a chart and a short explanation of the result.</p></div>
   </div>
 </section>
-<footer>AI SQL Analyst</footer>
+<footer>DataBridge</footer>
 
 <script>
 /* =========================================================
    CONFIG — change these if your FastAPI setup differs
    ========================================================= */
-const API_BASE     = "http://127.0.0.1:8000";
+/* Same origin in production: on Vercel these pages and the FastAPI app are one
+   deployment, so requests go to /ask directly. Falls back to a local uvicorn
+   when the page is opened from file:// or a static dev server (Live Server). */
+const LOCAL_PORTS  = ["5500", "5501"];
+const API_BASE     = location.protocol.startsWith("http") && !LOCAL_PORTS.includes(location.port)
+  ? ""
+  : "http://127.0.0.1:8000";
 const ASK_ENDPOINT = "/ask";       // POST endpoint
 const REQUEST_KEY  = "question";   // JSON field name your api.py expects
 
