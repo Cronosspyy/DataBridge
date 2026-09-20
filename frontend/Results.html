@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analysis — AI SQL Analyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+/* =========================================================
+   1. DESIGN TOKENS
+   ========================================================= */
+:root {
+  --bg: #0c0d0f;
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #ffffff;
+  --muted: #9aa3ad;
+  --dim: #6b747e;
+  --steel: #4f86b3;
+  --steel-deep: #2b5d8a;
+  --steel-dark: #16324f;
+  --ok: #4ade80;
+  --danger: #f08a8a;
+
+  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-pill: 999px;
+
+  --font: "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* =========================================================
+   2. BASE
+   ========================================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  padding: 14px;
+}
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--steel); outline-offset: 3px; border-radius: 6px; }
+
+/* =========================================================
+   3. HERO CONTAINER + BACKGROUND
+   ========================================================= */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100vh - 28px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: #0e1012;
+  padding: 28px 28px 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Blurred steel-blue orb */
+.orb {
+  position: absolute;
+  z-index: -3;
+  left: 50%; top: 42%;
+  width: min(900px, 120vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(79, 134, 179, 0.85) 0%,
+    var(--steel-deep) 22%,
+    var(--steel-dark) 46%,
+    transparent 70%);
+  filter: blur(70px);
+  opacity: 0.75;
+  animation: breathe 14s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.7; }
+  50%      { transform: translate(-50%, -52%) scale(1.06); opacity: 0.85; }
+}
+
+/* Faint orbit lines */
+.orbits {
+  position: absolute; inset: 0; z-index: -2;
+  width: 100%; height: 100%;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.orbits circle { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+
+/* Film grain */
+.grain {
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* =========================================================
+   4. TOP BAR
+   ========================================================= */
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+.status {
+  justify-self: start;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.03);
+  font-size: 13px; color: #cfd6dd;
+  backdrop-filter: blur(8px);
+}
+.status .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--dim);
+  transition: background .3s, box-shadow .3s;
+}
+.status.online .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.status.offline .dot { background: var(--danger); }
+
+.pill {
+  display: flex; align-items: stretch;
+  background: #fff; color: #111;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+.pill a, .pill .brand {
+  display: flex; align-items: center;
+  padding: 16px 22px;
+  font-size: 15px; font-weight: 500;
+  transition: background .2s;
+}
+.pill .brand { gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+.pill .brand svg { width: 18px; height: 18px; }
+.pill a { border-left: 1px solid rgba(0,0,0,0.08); }
+.pill a:hover { background: rgba(0,0,0,0.04); }
+
+.ext {
+  justify-self: end;
+  display: flex; gap: 22px;
+  font-family: var(--mono);
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #c4cbd2;
+}
+.ext a { transition: color .2s; }
+.ext a:hover { color: #fff; }
+
+
+
+/* =========================================================
+   RESULTS PAGE — overrides + components
+   ========================================================= */
+.orb { top: 14%; width: min(820px, 110vw); opacity: 0.5; }
+.page { flex: 1; width: min(1000px, 100%); margin: 0 auto; padding: clamp(36px, 6vh, 64px) 0 20px; display: flex; flex-direction: column; }
+
+.back {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 22px;
+  font-size: 14px; color: var(--muted);
+  transition: color .2s;
+}
+.back svg { width: 15px; height: 15px; transition: transform .25s var(--ease); }
+.back:hover { color: #fff; }
+.back:hover svg { transform: translateX(-4px); }
+
+/* Ask bar */
+.ask {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 8px 8px 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 12, 15, 0.6);
+  backdrop-filter: blur(14px);
+  transition: border-color .25s, box-shadow .25s;
+}
+.ask:focus-within { border-color: rgba(120,170,215,.7); box-shadow: 0 0 0 4px rgba(79,134,179,.16), 0 0 60px rgba(79,134,179,.22); }
+.ask svg.search { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.ask input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font-size: 16px; padding: 12px 0; }
+.ask input::placeholder { color: var(--dim); }
+.btn {
+  flex: none; display: inline-flex; align-items: center; gap: 14px;
+  padding: 6px 6px 6px 22px;
+  background: #fff; color: #111; border: 0; border-radius: var(--radius-pill);
+  font-weight: 500; font-size: 15px; cursor: pointer;
+  transition: transform .2s var(--ease), box-shadow .2s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,255,255,.14); }
+.btn:disabled { opacity: .6; cursor: progress; transform: none; }
+.btn .arrow { display: grid; place-items: center; width: 38px; height: 38px; background: #111; color: #fff; border-radius: 12px; }
+.btn .arrow svg { width: 16px; height: 16px; }
+
+/* Recent questions */
+.recent { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.recent[hidden] { display: none; }
+.recent .r-label { margin-right: 4px; }
+.chip {
+  padding: 7px 15px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: rgba(255,255,255,.02); color: var(--muted); font-size: 13px; cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s, transform .2s var(--ease);
+}
+.chip:hover { color: #fff; border-color: var(--border-strong); background: var(--surface-hover); transform: translateY(-2px); }
+
+/* Result container spacing (component styles come from the shared block below) */
+.result { margin-top: 30px; width: 100%; }
+
+/* Loading state */
+.stage { display: flex; align-items: center; gap: 12px; padding: 20px 28px; border-top: 1px dashed var(--dash); font-size: 14.5px; color: #cfd6dd; }
+.stage .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--steel); box-shadow: 0 0 0 0 rgba(79,134,179,.6); animation: pulse 1.4s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(79,134,179,0); } 100% { box-shadow: 0 0 0 0 rgba(79,134,179,0); } }
+.skeleton { padding: 22px 28px 28px; display: grid; gap: 12px; border-top: 1px dashed var(--dash); }
+.skeleton i {
+  display: block; height: 14px; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.04) 75%);
+  background-size: 200% 100%; animation: shimmer 1.3s linear infinite;
+}
+.skeleton i:nth-child(1) { width: 70%; } .skeleton i:nth-child(2) { width: 90%; } .skeleton i:nth-child(3) { width: 55%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.empty { padding: 34px 28px; color: var(--muted); font-size: 15px; }
+
+.rise { opacity: 0; transform: translateY(16px); animation: rise .7s var(--ease) forwards; animation-delay: calc(var(--i, 0) * 80ms + 60ms); }
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+@media (max-width: 720px) {
+  body { padding: 8px; }
+  .hero { padding: 18px 14px 26px; border-radius: 22px; min-height: calc(100vh - 16px); }
+  .topbar { grid-template-columns: 1fr auto; grid-template-areas: "nav nav" "status ext"; gap: 14px; }
+  .pill { grid-area: nav; justify-self: center; max-width: 100%; overflow-x: auto; }
+  .pill a, .pill .brand { padding: 13px 14px; font-size: 13.5px; }
+  .status { grid-area: status; font-size: 12px; }
+  .ext { grid-area: ext; gap: 14px; font-size: 11px; }
+  .ask { padding-left: 16px; }
+  .btn { padding-left: 16px; gap: 10px; }
+}
+@media (max-width: 520px) { .btn .label { display: none; } .btn { padding: 4px; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .rise { opacity: 1; transform: none; }
+}
+
+/* =========================================================
+   6. RESULT PANEL  (layout from the wireframe, styling from the Doss mega-menu:
+      dark panel, thin border, dashed cell dividers, quiet labels, arrow links)
+   ========================================================= */
+.result {
+  --dash: rgba(255, 255, 255, 0.15);
+  width: min(1000px, 100%);
+  margin-top: 40px;
+  text-align: left;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(16, 17, 19, 0.85);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+  animation: reveal .55s var(--ease);
+}
+.result[hidden] { display: none; }
+@keyframes reveal { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.r-label {
+  font-family: var(--mono);
+  font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim);
+}
+.r-head { padding: 26px 28px 28px; }
+.r-title {
+  margin-top: 10px;
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 500; letter-spacing: -0.025em; line-height: 1.12;
+  color: #fff;
+}
+.r-cell { padding: 22px 28px 26px; border-top: 1px dashed var(--dash); min-width: 0; }
+.r-cell .r-label { display: block; margin-bottom: 14px; }
+.explain { font-size: 16px; line-height: 1.6; color: #e3e8ec; max-width: 78ch; }
+
+.r-grid { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px dashed var(--dash); }
+.r-grid > .r-cell { border-top: 0; }
+.r-grid > .r-cell + .r-cell { border-left: 1px dashed var(--dash); }
+.r-grid.single { grid-template-columns: 1fr; }
+
+/* Insight (clean intro + bullets) */
+.insight { max-width: 78ch; }
+.insight-intro { font-size: 16px; line-height: 1.6; color: #e3e8ec; margin-bottom: 14px; }
+.insight-list { list-style: none; }
+.insight-list li { position: relative; padding: 12px 0 12px 22px; border-top: 1px dashed var(--dash); }
+.insight-list li:first-child { border-top: 0; }
+.insight-list li::before { content: ""; position: absolute; left: 3px; top: 21px; width: 6px; height: 6px; border-radius: 50%; background: var(--steel); }
+.i-main { display: block; font-size: 15.5px; line-height: 1.55; color: #dfe4e9; }
+.i-main strong { color: #fff; font-weight: 600; }
+.i-detail { display: block; margin-top: 3px; font-size: 13px; color: var(--dim); }
+.insight-note { margin-top: 14px; font-size: 13px; color: var(--dim); }
+.insight.wide { max-width: none; }
+.insight-list.grouped li { padding: 18px 0 18px 22px; }
+.insight-list.grouped li:first-child { padding-top: 6px; }
+.insight-list.grouped li::before { top: 29px; }
+.insight-list.grouped li:first-child::before { top: 17px; }
+.g-title { display: flex; align-items: baseline; gap: 12px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: #fff; }
+.g-rank { font-family: var(--mono); font-size: 11.5px; font-weight: 400; letter-spacing: .06em; color: var(--dim); }
+.g-stats { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 12px 36px; }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat .k { font-size: 12px; color: var(--dim); }
+.stat .v { font-size: 15px; color: #e6eaee; font-variant-numeric: tabular-nums; }
+
+
+/* Bar chart */
+.bars { display: grid; gap: 14px; }
+.bar-row { display: grid; grid-template-columns: minmax(70px, 110px) 1fr auto; align-items: center; gap: 14px; font-size: 13.5px; }
+.bar-label { color: #d5dbe1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 12px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+.bar-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--steel-deep), #9cc6e8);
+  border-radius: 4px;
+  transition: width 1s var(--ease);
+}
+.bar-value { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Results table */
+.tablewrap { max-height: 320px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 10px 14px 10px 0; text-align: left; white-space: nowrap; }
+th { position: sticky; top: 0; background: #131416; color: var(--dim); font-weight: 400; font-size: 13px; }
+td { border-top: 1px dashed var(--dash); color: #e6eaee; }
+td.num, th.num { text-align: right; padding-left: 28px; padding-right: 0; font-variant-numeric: tabular-nums; }
+.meta { margin-top: 12px; font-size: 12.5px; color: var(--dim); }
+
+/* SQL block */
+.sql-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sql-head .r-label { margin: 0; }
+.copy {
+  padding: 5px 14px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  background: transparent; color: var(--muted); font-size: 12.5px; cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.copy:hover { color: #fff; background: var(--surface-hover); }
+pre.sql {
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  color: #bcd3e8;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  overflow-x: auto;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* Footer row (like Doss "View all products →") */
+.r-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 28px;
+  border-top: 1px dashed var(--dash);
+  font-size: 14px;
+}
+.r-link {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: none; border: 0; color: #fff; cursor: pointer; font-size: 14px;
+}
+.r-link svg { width: 15px; height: 15px; transition: transform .25s var(--ease); }
+.r-link:hover svg { transform: translateX(5px); }
+.r-foot .meta { margin: 0; }
+
+.error { padding: 22px 28px; color: var(--danger); font-size: 14px; }
+.error small { display: block; margin-top: 6px; color: var(--dim); }
+
+@media (max-width: 720px) {
+  .r-grid { grid-template-columns: 1fr; }
+  .r-grid > .r-cell + .r-cell { border-left: 0; border-top: 1px dashed var(--dash); }
+  .r-head, .r-cell, .r-foot { padding-left: 18px; padding-right: 18px; }
+}
+
+
+</style>
+</head>
+
+<body>
+<main class="hero">
+  <div class="orb" aria-hidden="true"></div>
+  <svg class="orbits" aria-hidden="true" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice">
+    <circle cx="600" cy="300" r="260" /><circle cx="600" cy="300" r="420" /><circle cx="600" cy="300" r="600" /><circle cx="600" cy="300" r="800" />
+  </svg>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar rise" style="--i:0">
+    <div class="status" id="status" role="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+    <nav class="pill" aria-label="Main">
+      <a class="brand" href="index.html" style="border-left:0">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+        AI SQL Analyst
+      </a>
+      <a href="index.html">Product</a>
+      <a href="index.html#features">Features</a>
+      <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener">Docs</a>
+      <a href="index.html#learn">About</a>
+    </nav>
+    <div class="ext">
+      <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener">Docs ↗</a>
+      <a href="https://github.com/Cronosspyy" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </header>
+
+  <div class="page">
+    <a class="back rise" style="--i:1" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      Back to home
+    </a>
+
+    <form class="ask rise" style="--i:2" id="askForm" autocomplete="off">
+      <svg class="search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="question" type="text" placeholder="Ask a question about your data..." aria-label="Ask a question about your data" />
+      <button class="btn" id="analyzeBtn" type="submit">
+        <span class="label">Analyze</span>
+        <span class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+    </form>
+
+    <div class="recent rise" style="--i:3" id="recent" hidden></div>
+
+    <div class="result" id="result" aria-live="polite"></div>
+  </div>
+</main>
+
+<script>
+/* =========================================================
+   CONFIG — same as index.html
+   ========================================================= */
+const API_BASE     = "http://127.0.0.1:8000";
+const ASK_ENDPOINT = "/ask";
+const REQUEST_KEY  = "question";
+
+const $ = (s) => document.querySelector(s);
+const form = $("#askForm"), input = $("#question"), btn = $("#analyzeBtn"), resultEl = $("#result");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const isNum = (v) => v !== null && v !== "" && !isNaN(Number(v)) && typeof v !== "boolean";
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+/* ---------- API status pill ---------- */
+async function checkStatus() {
+  const s = $("#status"), t = $("#statusText");
+  try {
+    const r = await fetch(API_BASE + "/openapi.json", { cache: "no-store" });
+    if (!r.ok) throw new Error();
+    s.className = "status online"; t.textContent = "DB Connected";
+  } catch { s.className = "status offline"; t.textContent = "API Offline"; }
+}
+checkStatus(); setInterval(checkStatus, 15000);
+
+/* ---------- Normalise API response ---------- */
+function normalize(d) {
+  const sql = d.sql || d.generated_sql || d.query || "";
+  const explanation = d.explanation || d.answer || d.summary || d.insight || "";
+  let rows = d.rows || d.data || d.results || d.result || [];
+  if (!Array.isArray(rows)) rows = [];
+  let columns = d.columns || null;
+  if (rows.length && Array.isArray(rows[0])) {
+    if (!columns) columns = rows[0].map((_, i) => "col" + (i + 1));
+    rows = rows.map((r) => Object.fromEntries(columns.map((c, i) => [c, r[i]])));
+  } else if (rows.length && !columns) {
+    columns = Object.keys(rows[0]);
+  }
+  return { sql, explanation, rows, columns: columns || [] };
+}
+
+/* =========================================================
+   5. Render result
+      Layout: header (question) -> insight -> [bar chart | results] -> generated SQL -> footer
+   ========================================================= */
+const MONEY_COL = /spen[dt]|revenue|sales|amount|price|cost|profit|income/i;   // columns shown with a $ prefix
+const fmtCol = (col, v) => isNum(v)
+  ? (MONEY_COL.test(col) ? "$" : "") + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+  : String(v ?? "");
+const label = (t) => el("span", "r-label", t);
+
+function buildChart(rows, columns) {
+  if (!rows.length || columns.length < 2 || rows.length > 40) return null;
+  const valCol = columns.slice(1).find((c) => rows.every((r) => isNum(r[c])));
+  if (!valCol) return null;
+  const labelCol = columns[0];
+  const top = rows.slice(0, 12);
+  const max = Math.max(...top.map((r) => Number(r[valCol])), 1);
+
+  const cell = el("div", "r-cell");
+  cell.append(label("Bar chart"));
+  const bars = el("div", "bars");
+  top.forEach((r) => {
+    const row = el("div", "bar-row");
+    const track = el("div", "bar-track"), fill = el("div", "bar-fill");
+    fill.dataset.w = Math.max((Number(r[valCol]) / max) * 100, 2);
+    track.append(fill);
+    row.append(el("span", "bar-label", String(r[labelCol] ?? "")), track, el("span", "bar-value", fmtCol(valCol, r[valCol])));
+    bars.append(row);
+  });
+  cell.append(bars);
+  return cell;
+}
+
+function buildTable(rows, columns) {
+  if (!rows.length) return null;
+  const cell = el("div", "r-cell");
+  cell.append(label("Results"));
+  const wrap = el("div", "tablewrap"), table = el("table");
+  const thead = el("thead"), hr = el("tr");
+  columns.forEach((c) => hr.append(el("th", rows.every((r) => isNum(r[c])) ? "num" : "", c)));
+  thead.append(hr);
+  const tbody = el("tbody");
+  rows.slice(0, 100).forEach((r) => {
+    const tr = el("tr");
+    columns.forEach((c) => tr.append(el("td", isNum(r[c]) ? "num" : "", fmtCol(c, r[c]))));
+    tbody.append(tr);
+  });
+  table.append(thead, tbody); wrap.append(table); cell.append(wrap);
+  cell.append(el("p", "meta", `${rows.length} row${rows.length === 1 ? "" : "s"}` + (rows.length > 100 ? " (showing first 100)" : "")));
+  return cell;
+}
+
+/* ---------- Insight formatter: markdown-ish LLM text -> clean intro + bullets (no stars) ---------- */
+function inline(text, parent) {
+  text.split(/\*\*(.+?)\*\*/g).forEach((p, i) => {          // odd indexes were wrapped in ** **
+    p = p.replace(/[*`]/g, "");
+    if (!p) return;
+    parent.append(i % 2 ? el("strong", null, p) : document.createTextNode(p));
+  });
+}
+const stripStars = (s) => s.replace(/[*`]/g, "").trim();
+// "Korea" / "**Korea**" / "Korea:"  -> header (no digits, no $, no inner colon, no pipe)
+const isHeader = (s) => /^[^:|\d$]{1,60}:?$/.test(stripStars(s));
+
+function parseInsight(raw) {
+  const t = String(raw).replace(/\r/g, "").trim();
+  let intro = "", items = [], note = "";
+  const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
+  const bulletRe = /^([-*•]|\d{1,2}[.)])\s+/;
+
+  if (lines.filter((l) => bulletRe.test(l)).length >= 2) {            // one item per line
+    lines.forEach((l) => {
+      if (bulletRe.test(l)) items.push(l.replace(bulletRe, ""));
+      else if (/^\*\*.+\*\*:?$/.test(l)) items.push(l);                // un-bulleted bold heading such as **Korea**
+      else if (items.length) note += (note ? " " : "") + l;
+      else intro += (intro ? " " : "") + l;
+    });
+  } else {                                                             // "1. ... 2. ... 3. ..." inside one paragraph
+    const marks = []; let n = 1, from = 0;
+    for (;;) {
+      const re = new RegExp("(^|\\s)" + n + "\\.\\s+(?=\\S)", "g"); re.lastIndex = from;
+      const m = re.exec(t); if (!m) break;
+      marks.push({ s: m.index, e: m.index + m[0].length }); from = m.index + m[0].length; n++;
+    }
+    if (marks.length >= 2) {
+      intro = t.slice(0, marks[0].s);
+      marks.forEach((m, i) => items.push(t.slice(m.e, i + 1 < marks.length ? marks[i + 1].s : t.length).trim()));
+    } else {
+      const sentences = t.split(/(?<=[.!?])\s+(?=[A-Z])/);            // plain paragraph -> one bullet per sentence
+      if (sentences.length >= 3) items = sentences; else intro = t;
+    }
+  }
+  if (items.length) {                                                  // trailing "Note: ..." belongs below the list
+    const last = items[items.length - 1], k = last.search(/\*?\(?\s*Note:/i);
+    if (k === 0) { note = (last + " " + note).trim(); items.pop(); }
+    else if (k > 0) { note = (last.slice(k) + " " + note).trim(); items[items.length - 1] = last.slice(0, k).trim(); }
+  }
+  note = note.replace(/^[\s*(]*Note:\s*/i, "").replace(/[)*\s]+$/, "").replace(/^[*(\s]+/, "");
+  return { intro: intro.trim().replace(/:\s*$/, ""), items, note };
+}
+
+// Flat bullets like [Korea, Total Revenue: .., Orders: 46 | Unique Customers: 46, ...]
+// -> [{ title: "Korea", stats: [{k, v}, ...] }, ...]. Returns null when the list isn't in that shape.
+function groupItems(items) {
+  const heads = items.filter(isHeader).length;
+  if (heads < 2 || heads === items.length) return null;
+  const groups = []; let cur = null;
+  items.forEach((it) => {
+    if (isHeader(it)) { cur = { title: stripStars(it).replace(/:$/, ""), stats: [] }; groups.push(cur); return; }
+    if (!cur) { cur = { title: "", stats: [] }; groups.push(cur); }
+    it.split("|").forEach((part) => {
+      const c = part.indexOf(":");
+      if (c > 0) cur.stats.push({ k: stripStars(part.slice(0, c)), v: stripStars(part.slice(c + 1)) });
+      else if (stripStars(part)) cur.stats.push({ k: "", v: stripStars(part) });
+    });
+  });
+  return groups;
+}
+
+function insightNode(raw) {
+  const { intro, items, note } = parseInsight(raw);
+  const groups = groupItems(items);
+  const box = el("div", "insight" + (groups ? " wide" : ""));
+  if (intro) { const p = el("p", "insight-intro"); inline(intro, p); box.append(p); }
+
+  if (groups) {                                                        // one bullet per country, all its values inside
+    const ul = el("ul", "insight-list grouped");
+    groups.forEach((g, i) => {
+      const li = el("li"), title = el("div", "g-title");
+      title.append(el("span", "g-rank", String(i + 1).padStart(2, "0")), el("span", null, g.title));
+      li.append(title);
+      const stats = el("div", "g-stats");
+      g.stats.forEach((s) => {
+        const d = el("div", "stat");
+        if (s.k) d.append(el("span", "k", s.k));
+        d.append(el("span", "v", s.v));
+        stats.append(d);
+      });
+      li.append(stats); ul.append(li);
+    });
+    box.append(ul);
+  } else if (items.length) {
+    const ul = el("ul", "insight-list");
+    items.forEach((it) => {
+      let detail = "";
+      const dm = it.match(/\s*\(([^()]*)\)\.?\s*$/);                   // trailing "( ... )" -> muted second line
+      if (dm) { detail = dm[1]; it = it.slice(0, dm.index); }
+      it = it.replace(/[\s.]+$/, "");
+      const li = el("li"), main = el("span", "i-main");
+      inline(it, main); li.append(main);
+      if (detail) li.append(el("span", "i-detail", detail.replace(/[*`]/g, "")));
+      ul.append(li);
+    });
+    box.append(ul);
+  }
+  if (note) box.append(el("p", "insight-note", "Note: " + note));
+  return box;
+}
+
+function render(data, question, ms) {
+  const { sql, explanation, rows, columns } = normalize(data);
+  resultEl.replaceChildren();
+
+  // 1. Header: what was asked
+  const head = el("div", "r-head");
+  head.append(label("Analysis result"), el("h2", "r-title", question));
+  resultEl.append(head);
+
+  // 2. Insight
+  if (explanation) {
+    const c = el("div", "r-cell");
+    c.append(label("Insight"), insightNode(explanation));
+    resultEl.append(c);
+  }
+
+  // 3. Bar chart | Results (side by side; falls back to one column if no chart)
+  const chart = buildChart(rows, columns), table = buildTable(rows, columns);
+  if (chart || table) {
+    const grid = el("div", "r-grid" + (chart && table ? "" : " single"));
+    if (chart) grid.append(chart);
+    if (table) grid.append(table);
+    resultEl.append(grid);
+  } else if (!sql && !explanation) {
+    resultEl.append(el("div", "error", "The API returned an empty response."));
+  } else if (!rows.length) {
+    const c = el("div", "r-cell"); c.append(label("Results"), el("p", "meta", "No rows returned for this query."));
+    resultEl.append(c);
+  }
+
+  // 4. Generated SQL + Copy
+  if (sql) {
+    const c = el("div", "r-cell");
+    const h = el("div", "sql-head");
+    const copyBtn = el("button", "copy", "Copy"); copyBtn.type = "button";
+    copyBtn.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(sql); copyBtn.textContent = "Copied"; }
+      catch { copyBtn.textContent = "Press Ctrl+C"; }
+      setTimeout(() => (copyBtn.textContent = "Copy"), 1600);
+    });
+    h.append(label("Generated SQL"), copyBtn);
+    c.append(h, el("pre", "sql", sql));
+    resultEl.append(c);
+  }
+
+  // 5. Footer row
+  const foot = el("div", "r-foot");
+  const again = el("button", "r-link"); again.type = "button";
+  again.append(document.createTextNode("Ask another question"));
+  again.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
+  again.addEventListener("click", () => { input.select(); input.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" }); input.focus(); });
+  foot.append(again, el("span", "meta", ms ? `Answered in ${(ms / 1000).toFixed(1)}s` : ""));
+  resultEl.append(foot);
+
+  // animate bars after they're in the DOM
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    resultEl.querySelectorAll(".bar-fill").forEach((f) => (f.style.width = f.dataset.w + "%"))));
+}
+
+
+
+/* ---------- Loading / error states ---------- */
+let stageTimer = null;
+function showLoading(q) {
+  clearInterval(stageTimer);
+  resultEl.replaceChildren();
+  const head = el("div", "r-head"); head.append(label("Analysis result"), el("h2", "r-title", q));
+  const stage = el("div", "stage"), dot = el("span", "pulse"), txt = el("span", null, "Understanding your question…");
+  stage.append(dot, txt);
+  const sk = el("div", "skeleton"); sk.append(el("i"), el("i"), el("i"));
+  resultEl.append(head, stage, sk);
+  const steps = ["Understanding your question…", "Generating SQL…", "Validating the query (SELECT only)…", "Running it on PostgreSQL…", "Preparing insights…"];
+  let i = 0;
+  stageTimer = setInterval(() => { i = Math.min(i + 1, steps.length - 1); txt.textContent = steps[i]; }, 1600);
+}
+function showError(q, msg, hint) {
+  clearInterval(stageTimer);
+  resultEl.replaceChildren();
+  const head = el("div", "r-head"); head.append(label("Analysis result"), el("h2", "r-title", q));
+  const box = el("div", "error", msg);
+  if (hint) box.append(el("small", null, hint));
+  const foot = el("div", "r-foot");
+  const retry = el("button", "r-link"); retry.type = "button"; retry.textContent = "Try again";
+  retry.addEventListener("click", () => run(q));
+  foot.append(retry);
+  resultEl.append(head, box, foot);
+}
+
+/* ---------- Recent questions (per browser) ---------- */
+function getRecent() { try { return JSON.parse(localStorage.getItem("sqlAnalystRecent") || "[]"); } catch { return []; } }
+function pushRecent(q) {
+  try { localStorage.setItem("sqlAnalystRecent", JSON.stringify([q, ...getRecent().filter((x) => x !== q)].slice(0, 6))); } catch {}
+}
+function renderRecent(current) {
+  const box = $("#recent"), items = getRecent().filter((x) => x !== current).slice(0, 4);
+  box.replaceChildren();
+  if (!items.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.append(el("span", "r-label", "Recent"));
+  items.forEach((q) => {
+    const c = el("button", "chip", q); c.type = "button";
+    c.addEventListener("click", () => run(q));
+    box.append(c);
+  });
+}
+
+/* ---------- Run a question ---------- */
+async function run(q) {
+  q = (q || "").trim();
+  if (!q) { input.focus(); return; }
+  input.value = q;
+  document.title = q + " — AI SQL Analyst";
+  history.replaceState(null, "", "?q=" + encodeURIComponent(q));   // shareable / refresh-safe URL
+
+  const t0 = performance.now();
+  btn.disabled = true;
+  showLoading(q);
+  try {
+    const res = await fetch(API_BASE + ASK_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [REQUEST_KEY]: q }),
+    });
+    let data = {};
+    try { data = await res.json(); } catch {}
+    if (!res.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+      return showError(q, `Request failed (${res.status}).`, detail);
+    }
+    if (data.error) return showError(q, String(data.error));
+    clearInterval(stageTimer);
+    render(data, q, Math.round(performance.now() - t0));
+    pushRecent(q);
+  } catch {
+    showError(q, "Couldn't reach the API.", `Make sure uvicorn is running on ${API_BASE} and CORS is enabled in api.py.`);
+  } finally {
+    btn.disabled = false;
+    renderRecent(q);
+  }
+}
+
+form.addEventListener("submit", (e) => { e.preventDefault(); run(input.value); });
+
+/* ---------- On load: read ?q= from the URL ---------- */
+const initial = new URLSearchParams(location.search).get("q");
+if (initial) run(initial);
+else {
+  const box = el("div", "empty", "Ask a question above to see the SQL, chart and insight here.");
+  resultEl.append(box);
+  renderRecent("");
+}
+</script>
+</body>
+</html>

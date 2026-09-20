@@ -51,9 +51,14 @@ Explain the results in simple, clear language.
 
 Rules:
 - Answer the user's question directly.
+- Use clear bullet points.
+- Start with a one-sentence summary.
+- Present rankings as numbered points.
+- Put important metrics on separate lines.
+- Keep each bullet concise and easy to scan.
 - Mention important numbers.
 - Do not mention SQL or database implementation details.
-- Keep the explanation concise.
+- Do not use a large paragraph.
 """
 
     response = client.models.generate_content(
