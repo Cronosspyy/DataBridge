@@ -82,7 +82,8 @@ is tested without one.
 
   Only ISO dates are parsed, deliberately. `03/04/2025` is ambiguous between day
   and month order, so it stays text rather than being silently misread.
-  Likewise `1,234` stays text. Excel cells arrive already typed and are used as
+  Likewise `1,234` stays text, and so does a number with a leading zero such
+  as `007`: that is usually a code (a zip code, an ID) where the zero matters. Excel cells arrive already typed and are used as
   they are. Empty cells become `NULL`. A column with no non-empty values is
   `TEXT`.
 - **Limits:** 4 MB total upload, 20 tables, 100 columns per table, 200,000 rows
@@ -109,9 +110,11 @@ Owns a dataset's lifecycle. The only module that uses the owner connection
 - **`get(id)`** returns metadata, or `None` if missing or past `expires_at`.
   Expiry is enforced here, so an expired dataset is unreachable immediately,
   whether or not cleanup has run.
-- **`engine_for(id)`** returns an engine logged in as the dataset's role, on the
-  same pooled host as `DATABASE_URL_READONLY`. Engines are cached per warm
-  function instance.
+- **`engine_for(dataset)`** returns an engine logged in as the dataset's role.
+  It takes the `Dataset` that `get()` returned rather than an id, so callers
+  do not look it up twice. The host comes from the owner connection, which in
+  Vercel is Neon's pooled endpoint — the same host as `DATABASE_URL_READONLY`.
+  Engines are cached per warm function instance.
 - **`cleanup()`** drops the schema (`CASCADE`), the role and the metadata row
   for every expired dataset.
 - **Capacity:** `create` refuses when 200 unexpired datasets already exist.
@@ -144,6 +147,16 @@ meaningful gain.
 - `execute_query(sql, engine=None)`: `None` means the existing sample engine.
 - `get_database_schema(engine=None, schema="public")`: reflects the given
   schema. Output format unchanged.
+
+### `src/sql_validator.py` — match whole words
+
+Found while planning: the validator rejects any SQL containing `create`,
+`update`, `delete` or `drop` as a substring, so every question touching a
+column such as `created_at`, `updated_at`, `is_deleted` or `dropoff_location`
+fails. The sample store happens to have no such columns; uploaded data almost
+always does. Forbidden keywords are matched as whole words instead. This is
+safe because writes are prevented by read-only database roles, not by the
+validator, which only exists to fail fast with a clear message.
 
 ### `app.py`
 
@@ -216,7 +229,10 @@ Errors from answering questions are unchanged.
 | `DATABASE_URL_READONLY` | Already set. Still used for the sample store; its host is reused for dataset roles. |
 | `CRON_SECRET` | **New.** Must be added in Vercel before the cron works. |
 
-New dependency: `openpyxl`, for reading Excel files. Pure Python and small.
+New runtime dependencies: `openpyxl`, for reading Excel files, and
+`python-multipart`, which FastAPI requires before it will accept file uploads.
+Both are pure Python and small. New test-only dependency: `httpx`, for
+FastAPI's test client.
 
 ## Testing
 
@@ -252,6 +268,12 @@ The riskiest assumption is checked first:
    If either fails, the affected connections use the direct endpoint instead,
    which works but holds more connections open; this spec gets updated before
    continuing.
+
+   **Done 2026-09-21, both pass** against the production Neon database. A role
+   created in the same transaction as its schema, table, `COPY` and grants
+   logged in through the pooled endpoint with `search_path`, read-only mode and
+   the 5s timeout applied, read its table by bare name, and was denied both
+   `public.customers` and writes. The test objects were dropped afterwards.
 2. `ingest.py` with its unit tests.
 3. `datasets.py` with its integration tests, including the isolation matrix.
 4. Result limits in `db.py`.
